@@ -1,56 +1,24 @@
-┌──────────────┐        ┌──────────────────────────┐
-│     User     │        │        Streamlit UI       │
-│ (Resume+JD)  │───────▶│ Upload PDF + Paste JD     │
-└──────────────┘        │ Calls FastAPI endpoints   │
-                        └─────────────┬─────────────┘
-                                      │
-                                      │ 1) /extract_resume (PDF)
-                                      ▼
-                           ┌──────────────────────────┐
-                           │      FastAPI Backend      │
-                           │  - Resume extractor       │
-                           │  - RAG pipeline           │
-                           │  - LLM prompt + safety    │
-                           └─────────────┬─────────────┘
-                                         │
-                          PDF text parse  │
-                                         ▼
-                           ┌──────────────────────────┐
-                           │   PDF Parser (PyMuPDF)    │
-                           └──────────────────────────┘
+sequenceDiagram
+  participant U as User
+  participant S as Streamlit UI
+  participant A as FastAPI Backend
+  participant P as PDF Parser
+  participant E as Embeddings API
+  participant V as Pinecone Vector DB
+  participant G as GPT (LLM)
 
-                                      │
-                                      │ 2) /analyze (resume_text + JD)
-                                      ▼
-                           ┌──────────────────────────┐
-                           │     RAG Retrieval Step    │
-                           │ Embed query + search      │
-                           └─────────────┬─────────────┘
-                                         │
-                                         ▼
-                         ┌───────────────────────────────┐
-                         │   Pinecone Vector Database     │
-                         │ Role expectations / benchmarks │
-                         │ Learning resources             │
-                         └───────────────────────────────┘
-                                         ▲
-                                         │ embeddings
-                                         ▼
-                           ┌──────────────────────────┐
-                           │ OpenAI Embeddings API     │
-                           └──────────────────────────┘
+  U->>S: Upload resume PDF + paste job description
+  S->>A: POST /extract_resume (PDF)
+  A->>P: Extract text
+  P-->>A: resume_text
+  A-->>S: resume_text
 
-                                      │ retrieved docs
-                                      ▼
-                           ┌──────────────────────────┐
-                           │        OpenAI GPT         │
-                           │ Uses retrieved evidence   │
-                           │ Returns structured JSON   │
-                           └─────────────┬─────────────┘
-                                         │
-                                         ▼
-                           ┌──────────────────────────┐
-                           │ Streamlit Results + PDF   │
-                           │ Summary + gaps + rewrites │
-                           │ Learning plan + download  │
-                           └──────────────────────────┘
+  S->>A: POST /analyze (resume_text, JD, role_hint)
+  A->>E: Embed query/inputs
+  E-->>A: vectors
+  A->>V: similarity search (top-k)
+  V-->>A: retrieved docs (benchmarks/resources)
+  A->>G: Prompt + retrieved docs (grounding)
+  G-->>A: structured JSON (summary, gaps, rewrites, plan)
+  A-->>S: JSON result
+  S-->>U: Render results + allow PDF download
