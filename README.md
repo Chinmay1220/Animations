@@ -1,27 +1,56 @@
-flowchart LR
-  U[User] --> S[Streamlit UI]
+┌──────────────┐        ┌──────────────────────────┐
+│     User     │        │        Streamlit UI       │
+│ (Resume+JD)  │───────▶│ Upload PDF + Paste JD     │
+└──────────────┘        │ Calls FastAPI endpoints   │
+                        └─────────────┬─────────────┘
+                                      │
+                                      │ 1) /extract_resume (PDF)
+                                      ▼
+                           ┌──────────────────────────┐
+                           │      FastAPI Backend      │
+                           │  - Resume extractor       │
+                           │  - RAG pipeline           │
+                           │  - LLM prompt + safety    │
+                           └─────────────┬─────────────┘
+                                         │
+                          PDF text parse  │
+                                         ▼
+                           ┌──────────────────────────┐
+                           │   PDF Parser (PyMuPDF)    │
+                           └──────────────────────────┘
 
-  %% Resume extraction
-  S -->|POST /extract_resume (PDF)| A[FastAPI Backend]
-  A --> P[PDF Parser\n(PyMuPDF / pdfplumber)]
-  P -->|resume_text| S
+                                      │
+                                      │ 2) /analyze (resume_text + JD)
+                                      ▼
+                           ┌──────────────────────────┐
+                           │     RAG Retrieval Step    │
+                           │ Embed query + search      │
+                           └─────────────┬─────────────┘
+                                         │
+                                         ▼
+                         ┌───────────────────────────────┐
+                         │   Pinecone Vector Database     │
+                         │ Role expectations / benchmarks │
+                         │ Learning resources             │
+                         └───────────────────────────────┘
+                                         ▲
+                                         │ embeddings
+                                         ▼
+                           ┌──────────────────────────┐
+                           │ OpenAI Embeddings API     │
+                           └──────────────────────────┘
 
-  %% Analysis (RAG + LLM)
-  S -->|POST /analyze\n(resume_text + JD + role_hint)| A
-
-  A --> R[Preprocess & Chunk\nresume + job description]
-  R --> E[Embedding Client\n(OpenAI Embeddings API)]
-  E -->|vectors| V[(Pinecone Vector DB)]
-
-  A -->|semantic query| V
-  V -->|top-k retrieved docs| A
-
-  A --> L[LLM Orchestrator\nPrompt Builder + Safety]
-  L --> C[Chat Completion\n(OpenAI GPT)]
-  C -->|structured JSON\n(summary, gaps, rewrites, plan)| A
-
-  A -->|JSON response| S
-
-  %% Report generation
-  S --> D[PDF Report Generator\n(ReportLab)]
-  D -->|Download| U
+                                      │ retrieved docs
+                                      ▼
+                           ┌──────────────────────────┐
+                           │        OpenAI GPT         │
+                           │ Uses retrieved evidence   │
+                           │ Returns structured JSON   │
+                           └─────────────┬─────────────┘
+                                         │
+                                         ▼
+                           ┌──────────────────────────┐
+                           │ Streamlit Results + PDF   │
+                           │ Summary + gaps + rewrites │
+                           │ Learning plan + download  │
+                           └──────────────────────────┘
